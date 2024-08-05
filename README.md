@@ -1,3 +1,7 @@
-Simple frame-reading based autoplayer in c++
+# Paro
+Simplified frame-processing autoplayer in c++
 
--- UI already written but i'm just here to post the autoplayer code
+# Features
+Works on every ns ❌
+Works on low ns ❌ (Note stacks are practically invisible)
+Works on high ns ✅ (Usually around 3x-3.8x)
