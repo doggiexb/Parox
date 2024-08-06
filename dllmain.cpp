@@ -22,11 +22,10 @@ KeyMapping keyMappings[] = {
     { 1185, 875, 255, 255, 255, MapVirtualKey(VK_OEM_7, 0), false}
 };
 
-bool TaskStatus = false;
+std::atomic<bool> TaskStatus(false);
+std::chrono::high_resolution_clock::time_point lastFrameTime;
 
-auto lastFrameTime = null;
-
-extern "C" __declspec(dllexport) void __cdecl StartRead() {
+extern "C" __declspec(dllexport) void __cdecl startRead() {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) {
         MessageBoxA(NULL, "Failed to initialize COM library.", "Error", MB_OK);
@@ -88,9 +87,9 @@ extern "C" __declspec(dllexport) void __cdecl StartRead() {
         return;
     }
 
-    auto lastFrameTime = std::chrono::high_resolution_clock::now();
+    lastFrameTime = std::chrono::high_resolution_clock::now();
 
-    while (TaskStatus) {
+    while (true) {
         DXGI_OUTDUPL_FRAME_INFO frameInfo;
         ComPtr<IDXGIResource> desktopResource;
         hr = deskDupl->AcquireNextFrame(0, &frameInfo, &desktopResource);
@@ -140,7 +139,7 @@ extern "C" __declspec(dllexport) void __cdecl StartRead() {
         D3D11_MAPPED_SUBRESOURCE mappedResource;
         hr = d3dContext->Map(stagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mappedResource);
 
-        if (TaskStatus) {
+        if (TaskStatus.load()) {
             if (SUCCEEDED(hr)) {
                 UINT width = stagingDesc.Width;
                 UINT height = stagingDesc.Height;
@@ -183,21 +182,26 @@ extern "C" __declspec(dllexport) void __cdecl StartRead() {
         std::chrono::duration<double, std::milli> elapsed = now - lastFrameTime;
         lastFrameTime = now;
 
-        // Calculate sleep time to maintain frame rate
         double targetFrameDuration = 16.68; // Approximately 60 FPS
         double sleepTime = targetFrameDuration - elapsed.count();
         if (sleepTime > 0) {
-            Sleep(static_cast<DWORD>(sleepTime));
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleepTime)));
         }
     }
 
     CoUninitialize();
 }
 
-extern "C" __declspec(dllexport) void __cdecl SwitchDllTaskStatus() {
-    TaskStatus = !TaskStatus;
+extern "C" __declspec(dllexport) void __cdecl switchDllTaskStatus() {
+    TaskStatus.store(!TaskStatus.load());
 }
 
-extern "C" __declspec(dllexport) void __cdecl GetFrameTime() {
-    return lastFrameTime;
+extern "C" __declspec(dllexport) uint64_t __stdcall getFrameTime() {
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> duration = currentTime - lastFrameTime;
+
+    // Ensure that the returned time is at least 16 milliseconds
+    uint64_t elapsedTime = static_cast<uint64_t>(duration.count());
+    #undef max
+    return std::max(elapsedTime, static_cast<uint64_t>(16));
 }
