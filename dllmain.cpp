@@ -15,20 +15,31 @@ struct KeyMapping {
     bool isPressed;
 };
 
+/* 
+        4k CONFIG
+* x
+* y
+* targetR
+* targetG
+* targetB
+* scanCode
+* isPressed[default=false]
+*/
 KeyMapping keyMappings[] = {
-    { 730, 875, 255, 255, 255, MapVirtualKey(0x41, 0), false},
-    { 885, 875, 255, 255, 255, MapVirtualKey(0x53, 0), false},
-    { 1033, 875, 255, 255, 255, MapVirtualKey(VK_OEM_1, 0), false},
-    { 1185, 875, 255, 255, 255, MapVirtualKey(VK_OEM_7, 0), false}
+    { 730, 875, 255, 255, 255, MapVirtualKey(0x41, 0), false },
+    { 885, 875, 255, 255, 255, MapVirtualKey(0x53, 0), false },
+    { 1033, 875, 255, 255, 255, MapVirtualKey(VK_OEM_1, 0), false },
+    { 1185, 875, 255, 255, 255, MapVirtualKey(VK_OEM_7, 0), false }
 };
 
+// Atomic variables
 std::atomic<bool> TaskStatus(false);
-std::chrono::high_resolution_clock::time_point lastFrameTime;
+std::atomic<std::chrono::high_resolution_clock::time_point> lastFrameTime;
 
 extern "C" __declspec(dllexport) void __cdecl startRead() {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to initialize COM library.", "Error", MB_OK);
+        std::cerr << "Failed to initialize COM library." << std::endl;
         return;
     }
 
@@ -43,7 +54,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         &d3dDevice, nullptr, &d3dContext);
 
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to create Direct3D Device.", "Error", MB_OK);
+        std::cerr << "Failed to create Direct3D Device." << std::endl;
         CoUninitialize();
         return;
     }
@@ -51,7 +62,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
     ComPtr<IDXGIDevice> dxgiDevice;
     hr = d3dDevice.As(&dxgiDevice);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to get DXGI device.", "Error", MB_OK);
+        std::cerr << "Failed to get DXGI device." << std::endl;
         CoUninitialize();
         return;
     }
@@ -59,7 +70,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
     ComPtr<IDXGIAdapter> dxgiAdapter;
     hr = dxgiDevice->GetAdapter(&dxgiAdapter);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to get DXGI adapter.", "Error", MB_OK);
+        std::cerr << "Failed to get DXGI adapter." << std::endl;
         CoUninitialize();
         return;
     }
@@ -67,7 +78,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
     ComPtr<IDXGIOutput> dxgiOutput;
     hr = dxgiAdapter->EnumOutputs(0, &dxgiOutput);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to enumerate outputs.", "Error", MB_OK);
+        std::cerr << "Failed to enumerate outputs." << std::endl;
         CoUninitialize();
         return;
     }
@@ -75,19 +86,19 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
     ComPtr<IDXGIOutput1> dxgiOutput1;
     hr = dxgiOutput.As(&dxgiOutput1);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to cast to IDXGIOutput1.", "Error", MB_OK);
+        std::cerr << "Failed to cast to IDXGIOutput1." << std::endl;
         CoUninitialize();
         return;
     }
 
     hr = dxgiOutput1->DuplicateOutput(d3dDevice.Get(), &deskDupl);
     if (FAILED(hr)) {
-        MessageBoxA(NULL, "Failed to duplicate output.", "Error", MB_OK);
+        std::cerr << "Failed to duplicate output." << std::endl;
         CoUninitialize();
         return;
     }
 
-    lastFrameTime = std::chrono::high_resolution_clock::now();
+    lastFrameTime.store(std::chrono::high_resolution_clock::now());
 
     while (true) {
         DXGI_OUTDUPL_FRAME_INFO frameInfo;
@@ -99,7 +110,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
                 continue;
             }
             else {
-                MessageBoxA(NULL, "Failed to acquire next frame.", "Error", MB_OK);
+                std::cerr << "Failed to acquire next frame." << std::endl;
                 break;
             }
         }
@@ -107,7 +118,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         ComPtr<ID3D11Texture2D> desktopImage;
         hr = desktopResource.As(&desktopImage);
         if (FAILED(hr)) {
-            MessageBoxA(NULL, "Failed to cast to ID3D11Texture2D.", "Error", MB_OK);
+            std::cerr << "Failed to cast to ID3D11Texture2D." << std::endl;
             deskDupl->ReleaseFrame();
             continue;
         }
@@ -129,7 +140,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
 
         hr = d3dDevice->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture);
         if (FAILED(hr)) {
-            MessageBoxA(NULL, "Failed to create staging texture.", "Error", MB_OK);
+            std::cerr << "Failed to create staging texture." << std::endl;
             deskDupl->ReleaseFrame();
             continue;
         }
@@ -179,9 +190,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         deskDupl->ReleaseFrame();
 
         auto now = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed = now - lastFrameTime;
-        lastFrameTime = now;
-
+        std::chrono::duration<double, std::milli> elapsed = now - lastFrameTime.load();
         double targetFrameDuration = 16.68; // Approximately 60 FPS
         double sleepTime = targetFrameDuration - elapsed.count();
         if (sleepTime > 0) {
@@ -194,14 +203,4 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
 
 extern "C" __declspec(dllexport) void __cdecl switchDllTaskStatus() {
     TaskStatus.store(!TaskStatus.load());
-}
-
-extern "C" __declspec(dllexport) uint64_t __stdcall getFrameTime() {
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = currentTime - lastFrameTime;
-
-    // Ensure that the returned time is at least 16 milliseconds
-    uint64_t elapsedTime = static_cast<uint64_t>(duration.count());
-    #undef max
-    return std::max(elapsedTime, static_cast<uint64_t>(16));
 }
