@@ -5,6 +5,11 @@
 
 using Microsoft::WRL::ComPtr;
 
+std::ofstream logFile("debug.log", std::ios_base::app);
+
+#define DEBUG(msg) logFile << msg << std::endl;
+
+// Structures
 struct KeyMapping {
     UINT x;
     UINT y;
@@ -15,16 +20,7 @@ struct KeyMapping {
     bool isPressed;
 };
 
-/* 
-        4k CONFIG
-* x
-* y
-* targetR
-* targetG
-* targetB
-* scanCode
-* isPressed[default=false]
-*/
+// Variables
 KeyMapping keyMappings[] = {
     { 730, 875, 255, 255, 255, MapVirtualKey(0x41, 0), false },
     { 885, 875, 255, 255, 255, MapVirtualKey(0x53, 0), false },
@@ -32,10 +28,16 @@ KeyMapping keyMappings[] = {
     { 1185, 875, 255, 255, 255, MapVirtualKey(VK_OEM_7, 0), false }
 };
 
+HWND hwnd = nullptr;
+
 // Atomic variables
 std::atomic<bool> TaskStatus(false);
-std::atomic<std::chrono::high_resolution_clock::time_point> lastFrameTime;
 
+// Functions : IN
+
+// Functions : IN End
+
+// Functions : OUT
 extern "C" __declspec(dllexport) void __cdecl startRead() {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) {
@@ -54,51 +56,49 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         &d3dDevice, nullptr, &d3dContext);
 
     if (FAILED(hr)) {
-        std::cerr << "Failed to create Direct3D Device." << std::endl;
         CoUninitialize();
+        DEBUG("Failed to create D3D11 Device.");
         return;
     }
 
     ComPtr<IDXGIDevice> dxgiDevice;
     hr = d3dDevice.As(&dxgiDevice);
     if (FAILED(hr)) {
-        std::cerr << "Failed to get DXGI device." << std::endl;
         CoUninitialize();
+        DEBUG("DxgiDevice failed to cast.");
         return;
     }
 
     ComPtr<IDXGIAdapter> dxgiAdapter;
     hr = dxgiDevice->GetAdapter(&dxgiAdapter);
     if (FAILED(hr)) {
-        std::cerr << "Failed to get DXGI adapter." << std::endl;
         CoUninitialize();
+        DEBUG("DxgiAdapter failed to cast.");
         return;
     }
 
     ComPtr<IDXGIOutput> dxgiOutput;
     hr = dxgiAdapter->EnumOutputs(0, &dxgiOutput);
     if (FAILED(hr)) {
-        std::cerr << "Failed to enumerate outputs." << std::endl;
         CoUninitialize();
+        DEBUG("DxgiOutput1 failed to cast.");
         return;
     }
 
     ComPtr<IDXGIOutput1> dxgiOutput1;
     hr = dxgiOutput.As(&dxgiOutput1);
     if (FAILED(hr)) {
-        std::cerr << "Failed to cast to IDXGIOutput1." << std::endl;
         CoUninitialize();
+        DEBUG("DxgiOutput1 failed to cast.");
         return;
     }
 
     hr = dxgiOutput1->DuplicateOutput(d3dDevice.Get(), &deskDupl);
     if (FAILED(hr)) {
-        std::cerr << "Failed to duplicate output." << std::endl;
         CoUninitialize();
+        DEBUG("Failed to Duplicate Output.");
         return;
     }
-
-    lastFrameTime.store(std::chrono::high_resolution_clock::now());
 
     while (true) {
         DXGI_OUTDUPL_FRAME_INFO frameInfo;
@@ -110,7 +110,6 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
                 continue;
             }
             else {
-                std::cerr << "Failed to acquire next frame." << std::endl;
                 break;
             }
         }
@@ -118,7 +117,6 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         ComPtr<ID3D11Texture2D> desktopImage;
         hr = desktopResource.As(&desktopImage);
         if (FAILED(hr)) {
-            std::cerr << "Failed to cast to ID3D11Texture2D." << std::endl;
             deskDupl->ReleaseFrame();
             continue;
         }
@@ -140,7 +138,6 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
 
         hr = d3dDevice->CreateTexture2D(&stagingDesc, nullptr, &stagingTexture);
         if (FAILED(hr)) {
-            std::cerr << "Failed to create staging texture." << std::endl;
             deskDupl->ReleaseFrame();
             continue;
         }
@@ -188,14 +185,7 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
         }
 
         deskDupl->ReleaseFrame();
-
-        auto now = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed = now - lastFrameTime.load();
-        double targetFrameDuration = 16.68; // Approximately 60 FPS
-        double sleepTime = targetFrameDuration - elapsed.count();
-        if (sleepTime > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleepTime)));
-        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(17));
     }
 
     CoUninitialize();
@@ -204,3 +194,5 @@ extern "C" __declspec(dllexport) void __cdecl startRead() {
 extern "C" __declspec(dllexport) void __cdecl switchDllTaskStatus() {
     TaskStatus.store(!TaskStatus.load());
 }
+
+// Functions :: OUT End
