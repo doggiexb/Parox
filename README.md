@@ -1,4 +1,4 @@
-# Paro
+# Parox
 Simplified frame-processing autoplayer in c++
 
 # Features
