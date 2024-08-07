@@ -1,5 +1,5 @@
 # Parox
-Simplified frame-processing autoplayer in c++
+frame-processing autoplayer in c++
 
 # Features
 Works on every ns ❌ (Accuracy will vary dependent on the ns)
